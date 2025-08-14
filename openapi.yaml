@@ -1,0 +1,409 @@
+openapi: 3.0.3
+info:
+  title: Cash Flow Automation API
+  version: "1.0.0"
+servers:
+  - url: https://api.example.com
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /imports:
+    post:
+      summary: Upload a bank statement file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                source:
+                  type: string
+                  example: excel
+      responses:
+        '200':
+          description: Import accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  import_batch_id:
+                    type: string
+                    format: uuid
+  /imports/{id}:
+    get:
+      summary: Get import status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Import status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Import'
+  /transactions:
+    get:
+      summary: List transactions
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: account_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: lvl2
+          schema: { type: string }
+        - in: query
+          name: lvl3
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        '200':
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+  /transactions/{id}:
+    patch:
+      summary: Update a transaction classification or flags
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lvl1: { type: string }
+                lvl2: { type: string }
+                lvl3: { type: string }
+                exclude_from_cf: { type: boolean }
+                tags: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+  /rules:
+    get:
+      summary: List rules
+      responses:
+        '200':
+          description: Rule list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Rule'
+    post:
+      summary: Create a rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rule'
+  /rules/{id}:
+    put:
+      summary: Update a rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleCreate'
+      responses:
+        '200':
+          description: Updated
+    delete:
+      summary: Delete a rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Deleted
+  /rules/apply:
+    post:
+      summary: Apply rules to an import batch
+      parameters:
+        - in: query
+          name: import_batch_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+  /plan:
+    get:
+      summary: List planned payments
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: List of planned payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlannedPayment'
+    post:
+      summary: Create planned payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlannedPaymentCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlannedPayment'
+  /plan/{id}:
+    patch:
+      summary: Update planned payment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlannedPaymentCreate'
+      responses:
+        '200':
+          description: Updated
+    delete:
+      summary: Delete planned payment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Deleted
+  /reports/cf:
+    get:
+      summary: Cash Flow report (Fact/Plan/Total) aggregated by your CF buckets
+      parameters:
+        - in: query
+          name: mode
+          schema:
+            type: string
+            enum: [fact, plan, total]
+            default: fact
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: CF report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CfReport'
+  /reports/cf/export.xlsx:
+    get:
+      summary: Download CF report as Excel
+      parameters:
+        - in: query
+          name: mode
+          schema:
+            type: string
+            enum: [fact, plan, total]
+            default: fact
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+components:
+  schemas:
+    Transaction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        company_id: { type: string, format: uuid }
+        account_id: { type: string, format: uuid }
+        import_batch_id: { type: string, format: uuid }
+        op_date: { type: string, format: date }
+        value_date: { type: string, format: date }
+        amount: { type: number, format: double }
+        currency: { type: string }
+        description_raw: { type: string }
+        counterparty_name: { type: string }
+        op_type: { type: string }
+        doc_in_number: { type: string }
+        act_date: { type: string, format: date }
+        lvl1: { type: string }
+        lvl2: { type: string }
+        lvl3: { type: string }
+        tags: { type: object, additionalProperties: true }
+        receipt_sent: { type: boolean }
+        receipt_number: { type: string }
+        exclude_from_cf: { type: boolean, default: false }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Rule:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        company_id: { type: string, format: uuid }
+        priority: { type: integer }
+        description: { type: string }
+        condition_json: { type: object, additionalProperties: true }
+        action_json: { type: object, additionalProperties: true }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    RuleCreate:
+      type: object
+      required: [priority, condition_json, action_json]
+      properties:
+        priority: { type: integer }
+        description: { type: string }
+        condition_json: { type: object, additionalProperties: true }
+        action_json: { type: object, additionalProperties: true }
+        is_active: { type: boolean, default: true }
+
+    Import:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        company_id: { type: string, format: uuid }
+        source: { type: string }
+        filename: { type: string }
+        parser: { type: string }
+        uploaded_at: { type: string, format: date-time }
+        rows_ingested: { type: integer }
+        status: { type: string }
+        log: { type: string }
+
+    PlannedPayment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        company_id: { type: string, format: uuid }
+        due_date: { type: string, format: date }
+        amount: { type: number, format: double }
+        currency: { type: string }
+        counterparty_name: { type: string }
+        lvl2: { type: string }
+        lvl3: { type: string }
+        status: { type: string }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
+
+    PlannedPaymentCreate:
+      type: object
+      required: [due_date, amount]
+      properties:
+        due_date: { type: string, format: date }
+        amount: { type: number, format: double }
+        currency: { type: string }
+        counterparty_name: { type: string }
+        lvl2: { type: string }
+        lvl3: { type: string }
+        status:
+          type: string
+          enum: [planned, approved, paid, canceled]
+          default: planned
+        note: { type: string }
+
+    CfReport:
+      type: object
+      properties:
+        header:
+          type: array
+          description: 'ВХОДЯЩИЙ ПОТОК / ДОХОДЫ / РАСХОДЫ / ЧИСТЫЙ / ОСТАТОК'
+          items:
+            type: object
+            additionalProperties: true
+        detail:
+          type: array
+          description: 'Строки категорий и суммы по ведрам'
+          items:
+            type: object
+            additionalProperties: true
